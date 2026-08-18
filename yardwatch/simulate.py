@@ -34,16 +34,39 @@ FAULTS = [
     ("CCTV feed 4 dropping out intermittently", Severity.HIGH),
 ]
 
-# Mean arrivals per hour across a 22:00-06:00 night shift. Tuned so that the
-# two-bay constraint actually binds in the small hours — with a median dwell of
-# ~35 min, two bays clear roughly 3.4 vehicles/hour, so rates above that are
-# where the queue starts backing onto the road.
-HOURLY_RATE = {22: 2.0, 23: 3.0, 0: 4.5, 1: 5.0, 2: 5.0, 3: 4.0, 4: 2.5, 5: 1.5}
+# Arrivals are modelled as a *batch* (compound Poisson) process, not as
+# independent arrivals.
+#
+# Why: observed volume is ~15 vehicles per night with a 20-45 min dwell, which
+# is under 60% utilisation of two bays. Independent arrivals at that rate
+# cannot produce the 7+ vehicle road queues actually seen — they would top out
+# around 2 or 3. A queue that large at that volume only happens if vehicles
+# turn up together, which matches reality: hauliers run to shared schedules and
+# arrive in convoy.
+#
+# So HOURLY_RATE is the rate of arrival *events*, and each event brings a batch
+# of vehicles drawn from BATCH_SIZES.
+HOURLY_RATE = {22: 0.4, 23: 0.65, 0: 1.25, 1: 1.5, 2: 1.5, 3: 1.0, 4: 0.5, 5: 0.35}
+
+# Vehicles per arrival event, and their relative likelihood. Most events are a
+# single vehicle; the occasional convoy of four or five is what puts a long
+# queue on the road.
+BATCH_SIZES = [1, 2, 3, 4, 5]
+BATCH_WEIGHTS = [0.44, 0.24, 0.16, 0.10, 0.06]
+
+# Vehicles in a convoy arrive within a few minutes of each other, not
+# simultaneously.
+BATCH_SPREAD_MINUTES = 4
 
 
 def _dwell_minutes(rng: random.Random) -> float:
-    """Log-normal dwell: median ~35 min, with a long tail."""
-    return min(240.0, rng.lognormvariate(3.55, 0.55))
+    """Log-normal dwell: median ~30 min, most vehicles between 20 and 45.
+
+    Log-normal rather than normal because turnaround cannot be negative and a
+    few vehicles always take far longer than typical. Sigma is tuned so roughly
+    two thirds of dwells fall in the observed 20-45 minute band.
+    """
+    return min(180.0, rng.lognormvariate(3.40, 0.35))
 
 
 def run(
@@ -60,22 +83,26 @@ def run(
     yard = Yard(capacity=capacity)
     shift = Shift(operator=operator, started_at=start, ended_at=start + timedelta(hours=hours))
 
-    # Build the arrival schedule first.
+    # Build the arrival schedule first, as batches rather than single vehicles.
     arrivals: list[tuple[datetime, str, str]] = []
     counter = 0
     for offset in range(hours):
         moment = start + timedelta(hours=offset)
-        rate = HOURLY_RATE.get(moment.hour, 1.5)
+        rate = HOURLY_RATE.get(moment.hour, 1.0)
         for _ in range(_poisson(rng, rate)):
-            counter += 1
-            minute = rng.randrange(60)
-            arrivals.append(
-                (
-                    moment + timedelta(minutes=minute),
-                    f"V{counter:03d}",
-                    rng.choice(CARRIERS),
+            batch_at = moment + timedelta(minutes=rng.randrange(60))
+            batch_size = rng.choices(BATCH_SIZES, weights=BATCH_WEIGHTS, k=1)[0]
+            # A convoy shares one carrier — they are running the same schedule.
+            carrier = rng.choice(CARRIERS)
+            for _ in range(batch_size):
+                counter += 1
+                arrivals.append(
+                    (
+                        batch_at + timedelta(minutes=rng.uniform(0, BATCH_SPREAD_MINUTES)),
+                        f"V{counter:03d}",
+                        carrier,
+                    )
                 )
-            )
     arrivals.sort(key=lambda item: item[0])
 
     # Replay arrivals and departures in timestamp order.

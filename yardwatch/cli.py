@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import timedelta
 
-from . import handover, metrics, simulate
+from . import handover, metrics, simulate, study
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,7 +23,29 @@ def main(argv: list[str] | None = None) -> int:
         help="SLO target wait before admission, in minutes (default: 15)",
     )
     parser.add_argument("--out", help="write the handover report to this path")
+    parser.add_argument(
+        "--study",
+        type=int,
+        metavar="NIGHTS",
+        help="run a capacity sweep across NIGHTS simulated shifts instead of "
+        "printing one handover report",
+    )
     args = parser.parse_args(argv)
+
+    if args.study:
+        results = study.sweep(
+            capacities=[2, 3, 4, 5],
+            nights=args.study,
+            target_wait=timedelta(minutes=args.target_wait),
+            hours=args.hours,
+        )
+        print(
+            f"Capacity sweep over {args.study} simulated nights "
+            f"(mean {results[0].mean_arrivals:.1f} arrivals/night, "
+            f"target wait {args.target_wait} min)\n"
+        )
+        print(study.as_markdown_table(results))
+        return 0
 
     shift, yard = simulate.run(hours=args.hours, capacity=args.capacity, seed=args.seed)
     computed = metrics.compute(
