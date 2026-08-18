@@ -40,23 +40,49 @@ to act on.
 ```bash
 python -m yardwatch.cli                    # simulated night shift, 2 bays
 python -m yardwatch.cli --capacity 3       # what if there were three?
+python -m yardwatch.cli --seed 7           # a different night
 python -m yardwatch.cli --out handover.md  # write the report to a file
 pytest                                     # 17 tests
 ```
 
+Runs are deterministic for a given seed, so any figure quoted below can be
+reproduced by anyone with the same command.
+
 ## The finding
 
 Running the same simulated night against different capacities is the point of
-the whole exercise:
+the whole exercise. Every figure below uses the default seed (`42`) and the
+default 8-hour shift, so they reproduce exactly:
 
-| Bays | Admitted within 15 min | Time with vehicles queued on the road | Max wait |
-|------|------------------------|----------------------------------------|----------|
-| 2    | 88.2%                  | 58.0 min                               | 34.3 min |
-| 3    | 100%                   | 9.7 min                                | 9.7 min  |
+```bash
+python -m yardwatch.cli --capacity 2
+python -m yardwatch.cli --capacity 3
+python -m yardwatch.cli --capacity 4
+```
 
-One additional bay removes almost an hour per night of HGVs waiting on a public
-road. That is the kind of claim that is impossible to make from memory and
-straightforward to make from data.
+Identical 23 arrivals in each run — only the bay count changes:
+
+| Bays | Admitted within 15 min | Road overflow | Max wait | Peak queue | Still waiting at shift end |
+|------|------------------------|---------------|----------|------------|----------------------------|
+| 2    | 31.6%                  | 293.3 min     | 99.4 min | 6          | 4                          |
+| 3    | 69.6%                  | 146.4 min     | 50.2 min | 4          | 0                          |
+| 4    | 91.3%                  | 75.6 min      | 41.9 min | 3          | 0                          |
+
+Two bays is not marginally tight, it is under-provisioned. Two thirds of
+arrivals wait longer than the target, the queue reaches six vehicles on the
+public road, and four vehicles never get in before the shift ends. A third bay
+clears the backlog but still misses the target on three arrivals in ten.
+Holding a 90% target takes four.
+
+The shape of that curve is the useful part: each added bay roughly halves the
+overflow, so there is no threshold to discover — only a cost decision about how
+much road queueing is acceptable. Framing it this way replaces an argument
+about whether the yard "feels busy" with a choice between numbers.
+
+One caveat, stated plainly: the arrival rate and dwell distribution in
+`simulate.py` are modelled, not measured. The conclusion holds for the modelled
+rate. Before this is used to argue for anything operationally, those parameters
+need re-tuning against observed vehicle counts.
 
 ## Design decisions
 
@@ -104,11 +130,13 @@ yardwatch/
   handover.py   shift handover report generation
   simulate.py   synthetic night-shift generator
   cli.py        command-line entry point
+  pyproject.toml  packaging and pytest configuration
 tests/          17 unit tests
 ```
 
 ## Next
 
+- [ ] Re-tune arrival rate and dwell distribution against observed vehicle counts
 - [ ] Export metrics to Prometheus and build a Grafana dashboard of bay
       occupancy, queue length and wait-time percentiles
 - [ ] Persist to SQLite so shifts accumulate over weeks rather than one night
