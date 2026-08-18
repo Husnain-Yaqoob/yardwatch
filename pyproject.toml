@@ -1,0 +1,12 @@
+[project]
+name = "yardwatch"
+version = "0.1.0"
+description = "Bay allocation, queue measurement and shift handover for a capacity-constrained vehicle yard"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+# Put the project root on sys.path so `pytest` works the same as
+# `python -m pytest`. Without this, pytest only adds the tests/ directory and
+# `import yardwatch` fails.
+pythonpath = ["."]
+testpaths = ["tests"]
