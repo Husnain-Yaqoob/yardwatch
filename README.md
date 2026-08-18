@@ -43,6 +43,7 @@ python -m yardwatch.cli --capacity 3       # what if there were three?
 python -m yardwatch.cli --seed 7           # a different night
 python -m yardwatch.cli --study 300        # capacity sweep across 300 nights
 python -m yardwatch.cli --out handover.md  # write the report to a file
+python -m yardwatch.charts                 # regenerate the README charts
 pytest                                     # 25 tests
 ```
 
@@ -58,6 +59,11 @@ same 300 simulated nights:
 ```bash
 python -m yardwatch.cli --study 300
 ```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/capacity-dark.png">
+  <img alt="Capacity sweep across 300 simulated nights. Admitted within 15 minutes rises from 52% at two bays to 96% at five. Road overflow falls from 147 minutes per night to 15." src="docs/capacity-light.png">
+</picture>
 
 At a mean of 15.3 arrivals per night and a 15-minute target wait:
 
@@ -78,7 +84,13 @@ routinely.
 **Volume is not the problem — clustering is.** Fifteen vehicles across eight
 hours is under 60% utilisation of two bays. On averages alone the yard looks
 comfortable. The queues happen because vehicles arrive together, and averages
-cannot see that.
+cannot see that. A single night makes the mechanism obvious — bay occupancy
+pinned flat at two while the road queue spikes behind it:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/one-night-dark.png">
+  <img alt="One simulated night. Bay occupancy sits pinned at the two-bay ceiling for most of the shift while the number of vehicles waiting on the road repeatedly spikes to four and five." src="docs/one-night-light.png">
+</picture>
 
 **There is no threshold, only a price.** Each added bay roughly halves the
 overflow with no cliff to find, so the question is not "how many bays are
@@ -157,8 +169,10 @@ yardwatch/
   handover.py   shift handover report generation
   simulate.py   synthetic night-shift generator (batch arrivals)
   study.py      capacity sweeps across many nights
+  charts.py     README figures, light and dark
   cli.py        command-line entry point
 tests/          25 unit tests
+docs/           generated charts
 pyproject.toml  packaging and pytest configuration
 ```
 
