@@ -1,0 +1,14 @@
+# Prometheus config for running everything directly on Windows, without Docker.
+#
+# The only difference from prometheus.yml is the target: with Docker, the
+# exporter is reachable by its service name on a container network; running
+# locally it is just another process on this machine, so localhost.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: yardwatch
+    static_configs:
+      - targets: ["localhost:8000"]

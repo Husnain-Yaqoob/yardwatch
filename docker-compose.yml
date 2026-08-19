@@ -1,0 +1,52 @@
+# Full observability stack: the yard exporter, Prometheus scraping it, and
+# Grafana with the dashboard provisioned from source.
+#
+#   docker compose up --build
+#   → Grafana    http://localhost:3000  (anonymous, no login)
+#   → Prometheus http://localhost:9090
+#   → raw metrics http://localhost:8000/metrics
+#
+# The dashboard is provisioned from deploy/dashboards/yardwatch.json rather
+# than clicked together in the UI, so it is version-controlled and comes back
+# identically on any machine.
+
+services:
+  exporter:
+    build: .
+    container_name: yardwatch-exporter
+    ports:
+      - "8000:8000"
+    command:
+      - python
+      - -m
+      - yardwatch.exporter
+      - --port=8000
+      - --capacity=2
+      - --speedup=60      # 60 simulated minutes per real second: a night in 8 min
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: yardwatch-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - exporter
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: yardwatch-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # Local demo only — never do this on anything reachable.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deploy/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus

@@ -1,0 +1,11 @@
+# Scrape every 5s rather than the usual 15s: the exporter runs the yard at 60x,
+# so a simulated hour passes in a real minute. At 15s we would miss short queue
+# spikes entirely — the same sampling-vs-replay problem noted in the README.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: yardwatch
+    static_configs:
+      - targets: ["exporter:8000"]

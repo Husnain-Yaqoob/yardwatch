@@ -44,7 +44,7 @@ python -m yardwatch.cli --seed 7           # a different night
 python -m yardwatch.cli --study 300        # capacity sweep across 300 nights
 python -m yardwatch.cli --out handover.md  # write the report to a file
 python -m yardwatch.charts                 # regenerate the README charts
-pytest                                     # 25 tests
+pytest                                     # 31 tests
 ```
 
 Runs are deterministic for a given seed, so any figure quoted below can be
@@ -103,6 +103,69 @@ distribution in `simulate.py` are calibrated against observed volume, peak
 window, typical turnaround and worst-observed queue — but they are a model, not
 a measurement. Logging real arrival and departure timestamps would tighten it
 considerably.
+
+## Live dashboard
+
+The analysis above runs in batch. The same yard also runs as a live system,
+instrumented for Prometheus and displayed in Grafana:
+
+```bash
+docker compose up --build
+```
+
+- Grafana — http://localhost:3000 (no login, local demo only)
+- Prometheus — http://localhost:9090
+- Raw metrics — http://localhost:8000/metrics
+
+![The YardWatch Grafana dashboard: stat tiles for current queue, rolling SLO, bay utilisation and arrival rate, above time series of bay occupancy against queue length, wait-time percentiles, arrivals by carrier and throughput.](docs/grafana-dashboard.png)
+
+The exporter runs the yard at 60x, so a full simulated night passes in about
+eight real minutes and the dashboard cycles through a night peak and a quiet
+daytime while you watch.
+
+**Instrumentation.** Three metric types, chosen by what each measures:
+
+| Type | Metrics | Why |
+|------|---------|-----|
+| Gauge | `bays_occupied`, `queue_length`, `bay_capacity` | values that rise and fall |
+| Counter | `arrivals_total`, `admissions_total`, `departures_total`, `slo_breaches_total` | monotonic totals, so `rate()` is meaningful |
+| Histogram | `wait_seconds`, `dwell_seconds` | distributions, so percentiles are computed server-side with `histogram_quantile()` |
+
+Wait buckets are set so that **900s is an exact boundary**. The 15-minute
+target has to be a bucket edge or the SLO panel interpolates between buckets
+and the headline number stops being a measurement. A test asserts this, because
+changing a bucket silently breaks every panel built on it.
+
+Prometheus scrapes every 5s rather than the usual 15s — at 60x, a 15s scrape
+would miss short queue spikes entirely, which is the same sampling-versus-replay
+problem described above.
+
+The dashboard is provisioned from `deploy/dashboards/yardwatch.json`, not
+clicked together in the UI, so it is version-controlled and reproducible on any
+machine.
+
+### Running it without Docker
+
+Prometheus and Grafana are single binaries and run fine on their own. Three
+terminals:
+
+```powershell
+# 1 — the exporter
+python -m yardwatch.exporter
+
+# 2 — Prometheus (from wherever you unpacked it)
+.\prometheus.exe --config.file=C:\path\to\yardwatch\deploy\prometheus-local.yml
+
+# 3 — Grafana (from its bin folder)
+.\grafana-server.exe
+```
+
+Then in Grafana at http://localhost:3000 (admin / admin): add a Prometheus
+data source pointing at `http://localhost:9090`, and import
+`deploy/dashboards/yardwatch.json` via Dashboards → New → Import.
+
+`prometheus-local.yml` differs from `prometheus.yml` in one line — the scrape
+target is `localhost:8000` rather than the container service name.
 
 ## Design decisions
 
@@ -170,16 +233,20 @@ yardwatch/
   simulate.py   synthetic night-shift generator (batch arrivals)
   study.py      capacity sweeps across many nights
   charts.py     README figures, light and dark
+  exporter.py   live Prometheus exporter
   cli.py        command-line entry point
-tests/          25 unit tests
-docs/           generated charts
+tests/          31 unit tests
+docs/           generated charts and dashboard screenshot
+deploy/         Prometheus config and provisioned Grafana dashboard
+Dockerfile
+docker-compose.yml
 pyproject.toml  packaging and pytest configuration
 ```
 
 ## Next
 
 - [ ] Log real arrival and departure timestamps to replace modelled parameters
-- [ ] Export metrics to Prometheus and build a Grafana dashboard of bay
+- [x] Export metrics to Prometheus and build a Grafana dashboard of bay
       occupancy, queue length and wait-time percentiles
 - [ ] Persist to SQLite so shifts accumulate over weeks rather than one night
 - [ ] Alert when queue length or wait time crosses threshold
