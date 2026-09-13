@@ -1,8 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "yardwatch"
 version = "0.1.0"
 description = "Bay allocation, queue measurement and shift handover for a capacity-constrained vehicle yard"
 requires-python = ">=3.10"
+
+# The simulation, the metrics and the handover report are pure standard library —
+# `yardwatch` runs with nothing installed beyond the package itself. The two
+# dependencies below are each used by exactly one module.
+dependencies = [
+    "matplotlib>=3.7",          # charts.py — regenerating the README figures
+    "prometheus-client>=0.20",  # exporter.py — the live Prometheus endpoint
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+yardwatch = "yardwatch.cli:main"
+
+[tool.setuptools]
+packages = ["yardwatch"]
 
 [tool.pytest.ini_options]
 # Put the project root on sys.path so `pytest` works the same as

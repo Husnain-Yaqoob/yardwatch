@@ -35,10 +35,29 @@ to act on.
 - **Generates a handover report** that leads with unresolved faults and current
   yard state, rather than a chronological wall of text.
 
+## Install
+
+Python 3.10 or newer.
+
+```bash
+git clone https://github.com/Husnain-Yaqoob/yardwatch.git
+cd yardwatch
+pip install -e ".[dev]"
+```
+
+`-e` installs in editable mode, so edits take effect without reinstalling, and
+`[dev]` adds pytest. Drop it if you only want to run the thing.
+
+The simulation, the metrics and the handover report are pure standard library.
+The two dependencies are each used by exactly one module — matplotlib by
+`charts.py`, prometheus-client by `exporter.py` — so if you only want the CLI,
+neither is doing any work.
+
 ## Try it
 
 ```bash
-python -m yardwatch.cli                    # simulated night shift, 2 bays
+yardwatch                                  # simulated night shift, 2 bays
+python -m yardwatch.cli                    # the same thing, if you prefer
 python -m yardwatch.cli --capacity 3       # what if there were three?
 python -m yardwatch.cli --seed 7           # a different night
 python -m yardwatch.cli --study 300        # capacity sweep across 300 nights
